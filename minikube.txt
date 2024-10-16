@@ -1,0 +1,1608 @@
+minikube installation
+
+What you’ll need
+ - 2 CPUs or more
+ - 2GB of free memory
+ - 20GB of free disk space
+ - Internet connection
+ - Container or virtual machine manager, such as: Docker, QEMU, Hyperkit, Hyper-V, KVM, Parallels, Podman, VirtualBox,    or VMware Fusion/Workstation
+
+docker installation
+ - yum install docker -y
+ - service docker start
+
+kubectl installation
+ - curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+ - chmod +x ./kubectl 
+ - sudo mv ./kubectl /usr/local/bin/kubectl
+
+minikube installation
+ - curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+ - sudo install minikube-linux-amd64 /usr/local/bin/minikube
+ - exit         ### exit from root
+ - sudo usermod -aG docker $USER && newgrp docker
+ - minikube start --driver=docker
+
+minikube status
+kubectl version
+kubectl get nodes
+
+
+===========================================
+
+kind: Pod                              
+apiVersion: v1                     
+metadata:                           
+  name: testpod                  
+spec:                                    
+  containers:                      
+    - name: c00                     
+      image: ubuntu              
+      command: ["/bin/bash", "-c", "while true; do echo Hello-Manoj; sleep 5 ; done"]
+  restartPolicy: Never         # Defaults to Always
+
+
+kubectl apply -f pod1.yml
+kubectl get pods -o wide
+kubectl get pods --watch
+kubectl describe pod testpod
+kubectl logs -f testpod
+kubectl delete pod testpod
+
+----------------------------------------------------------------------------
+-- annotations    ( add some description about pod )
+
+kind: Pod
+apiVersion: v1
+metadata:
+  name: mypod
+  annotations:
+    description: this is my first annotations
+spec:
+  containers:
+    - name: container01
+      image: ubuntu
+  restartPolicy: Never
+
+kubectl describe pod mypod                 # mypod is pod name , this command allow to see description
+
+-------------------------------------------------------------------------------------------------------------
+-- multi-container  ( more than one container in a pod )
+
+kind: Pod
+apiVersion: v1
+metadata:
+  name: testpod3
+spec:
+  containers:
+    - name: c00
+      image: ubuntu
+      command: ["/bin/bash", "-c", "while true; do echo manoj; sleep 5 ; done"]
+    - name: c01
+      image: ubuntu
+      command: ["/bin/bash", "-c", "while true; do echo Hello-manoj; sleep 5 ; done"]
+
+:wq
+
+[ec2-user@ip-172-31-23-129 ~]$ kubectl get pods 
+NAME       READY   STATUS      RESTARTS   AGE
+mypod2     0/2     Completed   0          4m4s
+testpod3   2/2     Running     0          3s
+
+kubectl logs -f testpod3 -c container03				# it gives logs from container03
+kubectl exec testpod3 -c container03 -- hostname -i            	# for pod ip add
+kubectl exec testpod3 -it -c container03 -- /bin/bash 	 	# to login container
+
+----------------------------------------------------------------------------------------------------
+-- Environment variables 
+
+In Kubernetes, environment variables are used to configure containers at runtime. They provide a way to pass configuration data to your containers, which can be used to customize the behavior of the applications running inside them.
+
+kind: Pod
+apiVersion: v1
+metadata:
+  name: testpod3
+spec:
+  containers:
+    - name: container01
+      image: ubuntu
+      command: ["/bin/bash", "-c", "while true; do echo hello-everyone; sleep 5 ; done"]
+      env:
+        - name: owner
+          value: manoj
+
+---------------------------------------------------------------------------------------------------------
+-- pod with ports
+
+kind: Pod
+apiVersion: v1
+metadata:
+  name: testpod4
+spec:
+  containers:
+    - name: c00
+      image: httpd
+      ports:
+       - containerPort: 80        
+          hostPort: 80                        
+
+-----------------------------------------------------------------------------------------------------
+-- LABELS and SELECTORS
+
+kind: Pod
+apiVersion: v1
+metadata:
+  name: mypod
+  labels:
+    env: testing
+    owner: manoj
+
+spec:
+  containers:
+    - name: container01
+      image: ubuntu
+      command: ["/bin/bash", "-c", "while true; do echo Hello-manoj; sleep 5 ; done"]
+
+:wq
+
+kubectl get pods --show-labels                    	   # pods with applied labels  (declarative method)
+kubectl label pods mypod project=devops          	   # to add labels in command (imperative method)
+kubectl get pods -l owner=manoj		           	   # searching pod with specific labels (equity based)
+kubectl get pods -l project=devops
+kubectl get pod -l env!=testing 		           # get pod that does not contain env=testing
+kubectl get pod -l env in(testing,development)	           # match multiple values (set based)
+kubectl get pod -l 'owner notin(mady)'
+-----------------------------------------------------------------------------------------------------------
+--NODE SELECTORS
+
+kind: Pod
+apiVersion: v1
+metadata:
+  name: nodelabels
+  labels:
+    env: testing
+spec:
+    containers:
+       - name: container03
+         image: ubuntu
+         command: ["/bin/bash", "-c", "while true; do echo Hello-manoj; sleep 5 ; done"]
+    nodeSelector:                                         
+       hardware: t2-medium
+:wq
+
+-- node selectors allows master to launch pod in specific node which have labels.
+-------------------------------------------------------------------------------------------------------
+-- REPLICATION CONTROLLER
+
+In Kubernetes, a Replication Controller (now deprecated in favor of Replica Sets) is an object that ensures a specified number of replica pods are running at all times. It helps maintain the desired state of a pod's replication and provides fault tolerance and high availability.
+
+kind: ReplicationController               #to create objects of replication type
+apiVersion: v1
+metadata:
+  name: myreplica
+spec:
+  replicas: 2                           # desired number of pods. if any pod get failed it will create another one
+  selector:                                 # tells the controller which pods to watch
+    owner: manoj                            # this must match to labels
+  template:                                 # template elements define template to launch a new pod
+    metadata:
+      name: mypod
+      labels:                               # selectors values need to match this value
+        owner: manoj
+    spec:
+     containers:
+       - name: container01
+         image: ubuntu
+         command: ["/bin/bash", "-c", "while true; do echo HelloWorld; sleep 5 ; done"]
+
+------------
+
+kind: ReplicationController
+apiVersion: v1
+metadata:
+  name: myreplica
+
+spec: 
+  replicas: 2
+  selector: 
+    owner: manoj
+  template: 
+    metadata:
+      name: mypod
+      labels:
+        owner: manoj
+
+    spec:
+      containers:
+        - name: container01
+          image: ubuntu
+          command: ["/bin/bash", "-c", "while true; do echo HelloWorld; sleep 5 ; done"]
+
+:wq
+
+kubectl get rc
+kubectl describe rc myreplica                      #  get all details about rc
+kubectl get pods --show-labels
+NAME              READY   STATUS    RESTARTS   AGE     LABELS
+myreplica-5lqkt   1/1     Running   0          4m14s   owner=manoj
+myreplica-86vxf   1/1     Running   0          4m14s   owner=manoj
+
+- if we delete one pod it will automatic maintain desired state
+
+kubectl delete pod myreplica-86vxf
+pod "myreplica-86vxf" deleted
+
+kubectl get pods --show-labels
+NAME              READY   STATUS    RESTARTS   AGE    LABELS
+myreplica-5lqkt   1/1     Running   0          7m4s   owner=manoj
+myreplica-vndnb   1/1     Running   0          35s    owner=manoj        ------> new created pod 
+
+- scaling up and down
+
+kubectl scale --replicas=5 rc -l owner=manoj
+replicationcontroller/myreplica scaled
+
+kubectl get pods --show-labels
+NAME              READY   STATUS    RESTARTS   AGE     LABELS
+myreplica-5lqkt   1/1     Running   0          10m     owner=manoj
+myreplica-5tjdt   1/1     Running   0          4s      owner=manoj
+myreplica-g5x89   1/1     Running   0          4s      owner=manoj
+myreplica-pt8kh   1/1     Running   0          4s      owner=manoj
+myreplica-vndnb   1/1     Running   0          4m18s   owner=manoj
+
+kubectl scale --replicas=2 rc -l owner=manoj               # for scale down
+kubectl get pods --show-labels
+NAME              READY   STATUS    RESTARTS   AGE     LABELS
+myreplica-5lqkt   1/1     Running   0          12m     owner=manoj
+myreplica-vndnb   1/1     Running   0          6m20s   owner=manoj
+
+kubectl delete rc myreplica                 # to delete rc
+
+--------------------------------------------------------------------------------------------
+-- deployment and rollback
+
+In Kubernetes, a deployment is an object that defines the desired state for a set of pods. It allows you to declaratively manage the lifecycle and scaling of your application containers. Deployments are a higher-level abstraction that provides a convenient way to manage and update your application in a Kubernetes cluster.
+
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+   name: mydeployments
+spec:
+   replicas: 2
+   selector:     
+    matchLabels:
+     name: deployment
+   template:
+     metadata:
+       name: testpod
+       labels:
+         name: deployment
+     spec:
+      containers:
+        - name: container05
+          image: ubuntu
+          command: ["/bin/bash", "-c", "while true; do echo hello-world; sleep 5; done"]
+
+:wq
+
+kubectl get deploy
+NAME            READY   UP-TO-DATE   AVAILABLE   AGE
+mydeployments   2/2     2            2           19s
+
+kubectl get deploy -o wide
+NAME            READY   UP-TO-DATE   AVAILABLE   AGE   CONTAINERS    IMAGES   SELECTOR
+mydeployments   2/2     2            2           36s   container05   ubuntu   name=deployment
+
+kubectl describe deploy mydeployments
+
+kubectl get rs             # get replica set
+NAME                       DESIRED   CURRENT   READY   AGE
+mydeployments-7cd9c9d7c7   2         2         2       7m8s
+
+- now do changes in mydeploy.yml file and apply changes it will create two replica set 
+
+kubectl get rs
+NAME                       DESIRED   CURRENT   READY   AGE
+mydeployments-5db848d4bc   2         2         2       84s
+mydeployments-7cd9c9d7c7   0         0         0       13m                ---> the old replica set 
+
+kubectl exec mydeployments-5db848d4bc-zbtks -- cat /etc/os-release                         # to get version release
+
+kubectl scale --replicas=3 deploy mydeployments                                            # for scale up and down
+
+kubectl rollout status deploy mydeployments                      # to check the status of rollout 
+kubectl rollout history deploy mydeployments
+kubectl rollout history deploy mydeployments --revision=1	 # take any revision no 
+kubectl rollout undo deploy mydeployments	   	         # to undo or to go on previous version 
+kubectl rollout undo deploy mydeployments --to-revision=1	 # to rollback specific revision
+
+===================================
+-- Types of Deployment strategies
+===================================
+
+In Kubernetes, there are several types of Deployments based on how they manage the update and scaling of application replicas. Here are the main types:
+
+RollingUpdate: 
+	This is the default and most common type of Deployment in Kubernetes. It allows you to perform rolling updates, meaning it gradually replaces old replicas with new ones. During an update, the Deployment ensures that a specified number of replicas are available at all times, minimizing downtime.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rolling-deployment
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: rolling-deployment
+    spec:
+      containers:
+        - name: app-container
+          image: my-app:v2
+
+-------------------------------------
+Recreate: 
+	The Recreate strategy stops all existing replicas before scaling up the new replicas. This results in a temporary downtime during updates, as all existing replicas are terminated before the new ones are created.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recreate-deployment
+spec:
+  replicas: 3
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: recreate-deployment
+    spec:
+      containers:
+        - name: app-container
+          image: my-app:v2
+
+------------------------------------
+
+Paused: 
+	The Paused strategy is used to prevent automatic rollout of updates. It allows you to pause a Deployment, preventing any new replicas from being created or updated. This can be useful when you need to temporarily halt updates for some reason.
+
+Canary: 
+	Canary Deployment is a strategy that allows you to roll out updates to a subset of replicas first (e.g., 10% of the total), observe their behavior, and then proceed with updating the rest if everything goes well. This can be helpful in testing updates with a smaller portion of the user traffic before rolling out to all replicas.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: canary-deployment
+spec:
+  replicas: 6
+  template:
+    metadata:
+      labels:
+        app: canary-deployment
+    spec:
+      containers:
+        - name: app-container
+          image: my-app:v2
+
+------------------------------------
+
+Blue-Green: 
+	The Blue-Green Deployment strategy involves maintaining two identical environments (Blue and Green), but only one is active at a time. Updates are deployed to the inactive environment, and once the update is verified, traffic is switched to the updated environment, making it active, while the previous environment becomes inactive.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blue-deployment
+spec:
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: blue-deployment
+    spec:
+      containers:
+        - name: app-container
+          image: my-app:blue
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: green-deployment
+spec:
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: green-deployment
+    spec:
+      containers:
+        - name: app-container
+          image: my-app:green
+
+-----------------------------------
+
+Reverse Rolling Update: 
+	In a Reverse Rolling Update strategy, pods are scaled down before scaling up the new replicas. This can be useful in certain scenarios where you want to avoid running extra replicas during an update.
+
+----------------------------------------------------------------------------------------------------------
+-- Kubernetes Networking 
+
+lets create two container in one pod and try to communicate between them (container in same pod)
+
+=pod1.yml
+
+kind: Pod
+apiVersion: v1
+metadata:
+  name: testpod
+spec:
+  containers:
+    - name: container01
+      image: ubuntu
+      command: ["/bin/bash", "-c", "while true; do echo Hello; sleep 5 ; done"]
+    - name: container02
+      image: httpd
+      ports:
+       - containerPort: 80
+
+:wq
+
+kubectl apply -f pod1.yml
+
+- now enter  in container01 and try to do curl command
+
+kubectl exec testpod -it -c container01 -- /bin/bash
+
+root@testpod:/# apt update -y
+root@testpod:/# apt install curl -y
+root@testpod:/# curl localhopst:80
+<html><body><h1>It works!</h1></body></html>
+
+it means we get response from container02 so both container in pod can communicate each other by localhost
+
+-------------
+
+now try to establish communication between container of two different pods (containers in different pods)
+
+- pod to pod communication on same node happen through pod ip
+- by default pods ip not accessible outside the node 
+- now create two container in different pods
+
+= pod1.yml
+
+kind: Pod
+apiVersion: v1
+metadata:
+  name: testpod1
+spec:
+  containers:
+    - name: container01
+      image: httpd
+      ports:
+       - containerPort: 80
+
+=pod2.yml
+
+kind: Pod
+apiVersion: v1
+metadata:
+  name: testpod2
+spec:
+  containers:
+    - name: container02
+      image: nginx
+      ports:
+       - containerPort: 80
+
+kubectl apply -f pod1.yml
+kubectl apply -f pod2.yml
+
+-- now go to the container1 and try to curl another container by their ip
+
+kubectl exec testpod1 -it -c container01 -- /bin/bash
+root@testpod1:/# curl 10.244.0.29:80
+<html><body><h1>It works!</h1></body></html>
+
+so we can communicate with another container
+- but the main drawback is whenever any pod get delete the ip will get changed
+- to handle such situation services object used
+-------------------------------------------------------------------------------------------------
+
+-- Services
+
+
+In Kubernetes, a Service is an abstraction that provides network connectivity and load balancing for a group of pods. It acts as a stable endpoint to access the pods running within a Kubernetes cluster, regardless of their individual IP addresses or their dynamic nature.
+
+- services can be exposed in different ways by specifying a type in service spec:
+1) cluster ip
+2) NodePort
+3) LoadBalancer
+4) Headless
+
+-by default service can run only between ports 30000 - 32767
+
+===========
+Cluster IP 
+===========
+- exposes virtual ip (vip) only reachable from within cluster
+- mainly used for communicate between components of microservices
+
+- create one deploy file 
+
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+   name: mydeployments
+spec:
+   replicas: 1
+   selector:      # tells the controller which pods to watch/belong to
+    matchLabels:
+     name: deployment
+   template:
+     metadata:
+       name: testpod1
+       labels:
+         name: deployment
+     spec:
+      containers:
+        - name: container01
+          image: httpd
+          ports:
+          - containerPort: 80
+
+- apply the changes
+- as ip get changed on deletion of pod so we need to get one permanent ip or virtual ip
+
+ =service
+- is allowed to allocate new virtual ip for cluster
+- create one service file 
+
+kind: Service                   	# Defines to create Service type Object
+apiVersion: v1
+metadata:
+  name: demoservice
+spec:
+  ports:
+    - port: 80                        	# Containers port exposed
+      targetPort: 80                 	# Pods port
+  selector:
+    name: deployment                    # Apply this service to any pods which has the specific label
+  type: ClusterIP                   	# Specifies the service type i.e ClusterIP or NodePort
+
+- apply it 
+
+kubectl apply -f service.yml 
+kubectl get svc			# will get all services running on cluster
+NAME          TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)   AGE
+demoservice   ClusterIP   10.100.129.176   <none>        80/TCP    11m		# new service created 
+kubernetes    ClusterIP   10.96.0.1        <none>        443/TCP   5d22h	# this is a default service
+ 
+- this cluster ip never changes after deletion of pod 
+
+------------------------------------------------------------------
+=========
+NodePort
+=========
+- make service accessible from outside the cluster
+- expose the service on the same port of each selected node in the cluster using NAT
+
+ - create one deploy file 
+
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+   name: mydeployments
+spec:
+   replicas: 1
+   selector:      # tells the controller which pods to watch/belong to
+    matchLabels:
+     name: deployment
+   template:
+     metadata:
+       name: testpod1
+       labels:
+         name: deployment
+     spec:
+      containers:
+        - name: container01
+          image: httpd
+          ports:
+          - containerPort: 80
+
+- apply the changes
+- create service file with type = NodePort
+
+kind: Service                           # Defines to create Service type Object
+apiVersion: v1
+metadata:
+  name: demoservice
+spec:
+  ports:
+    - port: 80                     	# Containers port exposed
+      targetPort: 80                  	# Pods port
+  selector:
+    name: deployment                  	# Apply this service to any pods which has the specific label
+  type: NodePort                     	# Specifies the service type i.e ClusterIP or NodePort
+
+kubectl get svc
+NAME          TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+demoservice   NodePort    10.102.181.181   <none>        80:30257/TCP   10s
+kubernetes    ClusterIP   10.96.0.1        <none>        443/TCP        5d22h
+
+- we can see that the port we get is 30257, we can access it from outside the cluster
+
+--------------------------------------------------------------------------------------------
+-- LoadBalancer:
+
+This Service type integrates with cloud providers' load balancers to expose the Service using an external IP address. It is typically used in cloud environments.
+
+--------------------------------------------------------------------------------------------
+
+= VOLUMES
+
+- containers are short lived in nature 
+- all data stored in a container is deleted if the container is crash.
+- In Kubernetes volume is attached to a pod and shared among the containers in that pod.
+
+= VOLUME types
+
+- node local type : such as emptydir and hostpath
+- file sharing type : such as NFS
+- cloud provider specific : like AWSelasticBlockstore, Azuredisk
+- distributed file system type : like glusterfs or cephfs
+- special purpose types like secret or gitrepo
+
+1) Emptydir
+
+- An emptyDir volume is first created when a Pod is assigned to a node, 
+  and exists as long as that Pod is running on that node. 
+- As the name says, the emptyDir volume is initially empty. 
+- All containers in the Pod can read and write the same files in the emptyDir volume, 
+  though that volume can be mounted at the same or different paths in each container. 
+- When a Pod is removed from a node for any reason, the data in the emptyDir is deleted permanently.
+
+Note: A container crashing does not remove a Pod from a node. The data in an emptyDir volume is safe across container crashes.
+
+- now create one manifest emptydir.yml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myvolemptydir
+spec:
+  containers:
+  - name: container01
+    image: centos
+    command: ["/bin/bash", "-c", "sleep 15000"]
+    volumeMounts:                                    # Mount definition inside the container
+      - name: myvolume
+        mountPath: "/tmp/xchange"          
+  - name: container02
+    image: centos
+    command: ["/bin/bash", "-c", "sleep 10000"]
+    volumeMounts:
+      - name: xchange
+        mountPath: "/tmp/data"
+  volumes:                                             
+  - name: myvolume
+    emptyDir: {}
+
+:wq
+
+- now login to container01 and go into tmp/xchange directory and creatre some files and exit
+- now login to container02 and go into the tmp/data you can see the files which we created in container01 
+- hence we can access our volumes from both containers
+
+- now creating three container in single a pod 
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myvolemptydir
+spec:
+  volumes:
+    - name: myvolume
+      emptyDir: {}
+  containers:
+  - name: container01
+    image: centos
+    command: ["/bin/bash", "-c", "sleep 15000"]
+    volumeMounts:                                    # Mount definition inside the container
+      - name: myvolume
+        mountPath: "/tmp/xchange"          
+  - name: container02
+    image: centos
+    command: ["/bin/bash", "-c", "sleep 10000"]
+    volumeMounts:
+      - name: myvolume
+        mountPath: "/tmp/data"
+  - name: container03
+    image: centos
+    command: ["/bin/bash", "-c", "sleep 10000"]
+    volumeMounts:
+      - name: myvolume
+        mountPath: "/tmp/store"
+
+:wq
+
+- apply this yaml file and create file in container01 and check in all other container
+- we checked in container02 and 03 all files are present in their respective directory
+- hence we can attach emptydir to any container in same pod
+
+-------------------------------------------------------------------------
+2) HostPath
+
+- Use this when we want to access the content of pod/container from hostmachine
+- Hostpath volume mounts a file or directory from the host nodes file system into your pod 
+- This is not something that most Pods will need, but it offers a powerful escape hatch for some applications.
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myhostpath
+spec:
+  containers:
+  - image: centos
+    name: testc
+    command: ["/bin/bash", "-c", "sleep 15000"]
+    volumeMounts:
+    - mountPath: /tmp/hostpath
+      name: testvolume
+  volumes:
+  - name: testvolume
+    hostPath:
+      path: /tmp/data 
+
+:wq
+
+- now our host and pod's volume are in sync
+- we can share data between our host and pod volume
+
+----------------------------------------------------------------------------
+3) Persistent Volume
+
+- in order to use PV you need to claim it first, using a Persistent Volume Claim (PVC)
+- the pvc request to a pv with your desired specification (size, access mode and speed etc ) from Kubernetes and once a suitable volume found it is bound to PersistentVolumeClaim
+- it is reclaimed and recycled for future uses
+
+-- AWS EBS
+
+- an AWS EBS volume mounts on AWS EBS volume into your pod 
+- unlike emptydir which is erased when a pod is removed the content of an EBS volume is preserved and volume is merely unmounted
+
+-- there are some restriction
+
+- the nodes on which pods are running must be AWS ec2 instances 
+- those instances must be in same region and AZ as the EBS volume
+- EBS only support a single ec2 instances mounting a volume
+
+- create pv manifest
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mypvolume
+spec:
+  capacity:
+    storage: 1Gi                              # capacity for pv object
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Recycle
+  AWSElasticBlockStore:                        # it is different for different cloud provider 
+    volumeID: vol-03cdbcbdf0a5e77a2            # take volume id from AWS console which we created
+    fsType: ext4
+
+:wq
+
+kubectl apply -f mypv.yml
+kubectl get pv
+NAME        CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   REASON   AGE
+mypvolume   1Gi        RWO            Recycle          Available                                   8s 
+
+- now we have to claim volume for our container with PersistentVolumeClaim
+- now create PVC manifest
+
+apiVersion: v1
+kind: PersistentVolumeClaim            # new object
+metadata:
+  name: mypvclaim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+:wq
+
+kubectl apply -f mypvc.yml
+kubectl get pvc
+NAME        STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+mypvclaim   Bound    pvc-eed4e5d7-cd16-4892-9f65-af5f4b45a25e   1Gi        RWO            standard       9s
+
+- we claimed our volume now we can use that volume in our pod or container ( only 1 GB )
+- deploy pod 
+-- deploy.yml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pvdeploy
+spec:
+  replicas: 1
+  selector:      # tells the controller which pods to watch/belong to
+    matchLabels:
+     app: mypv
+  template:
+    metadata:
+      labels:
+        app: mypv
+    spec:
+      containers:
+      - name: container01
+        image: centos
+        command: ["bin/bash", "-c", "sleep 10000"]
+        volumeMounts:
+        - name: mypd
+          mountPath: "/tmp/persistent"
+      volumes:
+        - name: mypd
+          persistentVolumeClaim:
+            claimName: mypvclaim
+
+:wq
+
+kubectl apply -f deploypvc.yml
+kubectl get deploy
+NAME       READY   UP-TO-DATE   AVAILABLE   AGE
+pvdeploy   1/1     1            1           10s
+
+kubectl get pods
+NAME                        READY   STATUS    RESTARTS   AGE
+pvdeploy-69d7bf6f8c-67pdk   1/1     Running   0          98s
+
+- we have the pod, now we create some files in the container and delete the pod 
+- check whether new pod contain our file or not
+
+kubectl exec pvdeploy-69d7bf6f8c-67pdk -- cat /tmp/persistent/manoj.txt
+
+- we created a file in existing pod and deleted the pod 
+- new pod is created automatically, check file is there or not
+- file is there, hence volume is claimed
+
+kubectl get pod 
+NAME                        READY   STATUS    RESTARTS   AGE
+pvdeploy-69d7bf6f8c-tw8jx   1/1     Running   0          105s
+
+kubectl exec pvdeploy-69d7bf6f8c-tw8jx -- ls /tmp/persistent/
+manoj.txt
+
+kubectl exec pvdeploy-69d7bf6f8c-tw8jx -- cat /tmp/persistent/manoj.txt
+good evening
+
+-----------------------------------------------------------------------------------------
+== Healthcheck/LivenessProbe
+
+- a pod is considered ready when all container in pod are ready
+- in order to verify if a container in a pod is healthy and ready to serve traffic, k8s provide range of health checking mechanism
+- it checks the health of container if the container is unhealthy then it recreate the pod 
+
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    test: liveness
+  name: mylivenessprobe
+spec:
+  containers:
+  - name: liveness
+    image: ubuntu
+    args:
+    - /bin/sh
+    - -c
+    - touch /tmp/healthy; sleep 1000
+    livenessProbe:                                          
+      exec:
+        command:                                         
+        - cat                
+        - /tmp/healthy
+      initialDelaySeconds: 5          
+      periodSeconds: 5                                 
+      timeoutSeconds: 30 
+
+:wq
+- it will check whether the healthy file is present or not 
+- if the healthy file is not there then it will delete pod and recreate new one 
+
+kubectl exec mylivenessprobe -it -- /bin/bash
+cat tmp/healthy
+echo $?
+
+--------------------------------------------------------------------
+==Configmap
+
+- A ConfigMap provides a way to inject configuration data into pods. 
+- The data stored in a ConfigMap can be referenced in a volume of type configMap and then consumed by containerized applications running in a pod.
+- When referencing a ConfigMap, you provide the name of the ConfigMap in the volume. 
+
+-- configmap can be accessed in following ways
+1) Environment Variables
+2) Volume in the pod 
+
+cmd: kubectl create configmap <mapname> --from-file=<file_name>
+
+--Volume type
+
+- lets create one configuration file say kubernetes.conf
+
+kubectl create configmap myconfmap --from-file=kubernetes.conf
+configmap/myconfmap created
+
+kubectl describe configmap myconfmap
+
+Data
+====
+kubernetes.conf:
+----
+this is configuration file
+
+- configmap created, let's create pod 
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myvolconfig
+spec:
+  containers:
+  - name: c1
+    image: centos
+    command: ["/bin/bash", "-c", "while true; do echo hello-manoj; sleep 5 ; done"]
+    volumeMounts:
+      - name: testconfigmap
+        mountPath: "/tmp/config"   # the config files will be mounted as ReadOnly by default here
+  volumes:
+  - name: testconfigmap
+    configMap:
+       name: myconfmap   		   # this should match the config map name created in the first step
+       items:
+       - key: kubernetes.conf
+         path: kubernetes.conf
+
+:wq
+
+- pod created now try to login into container and check in "/tmp/config" file kubernetes.conf is present
+
+kubectl exec myvolconfig -it -- /bin/bash
+cat tmp/config/kubernetes.conf 
+"this is configuration file"
+
+- file is there and we can read the content
+
+-- Environment Variables type
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myenvconfig
+spec:
+  containers:
+  - name: c1
+    image: centos
+    command: ["/bin/bash", "-c", "while true; do echo Technical-Guftgu; sleep 5 ; done"]
+    env:
+    - name: MYENV         # env name in which value of the key is stored
+      valueFrom:
+        configMapKeyRef:
+          name: myconfmap      # name of the config created
+          key: kubernetes.conf
+
+:wq
+
+- enter into the pod 
+kubectl exec myenvconfig -it -- /bin/bash
+[root@myenvconfig /]# env
+"MYENV=this is configuration file"
+
+[root@myenvconfig /]# echo $MYENV
+this is configuration file
+
+- We can read the content from conf file 
+
+--------------------------------------------------------------------------------------------------------------------------
+==========
+Secret
+==========
+
+- A secret volume is used to pass sensitive information, such as passwords, to Pods. 
+- You can store secrets in the Kubernetes API and mount them as files for use by pods without coupling to Kubernetes directly. 
+- secret volumes are backed by tmpfs (a RAM-backed filesystem) so they are never written to non-volatile storage.
+
+- let's create two files
+	- username.txt
+	- password.txt
+
+- now make secret all above files
+kubectl create secret generic mysecret --from-file=username.txt --from-file=password.txt
+- to check secrets
+# kubectl get secrets
+
+- now mount this file to a pod 
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myvolsecret
+spec:
+  containers:
+  - name: c1
+    image: centos
+    command: ["/bin/bash", "-c", "while true; do echo Technical-guftgu; sleep 5 ; done"]
+    volumeMounts:
+      - name: testsecret
+        mountPath: "/tmp/mysecrets"   # the secret files will be mounted as ReadOnly by default here
+  volumes:
+  - name: testsecret
+    secret:
+       secretName: mysecret  
+
+:wq
+
+- create pod and enter into container and check files are there
+
+[root@myvolsecret mysecrets]# ls
+password.txt  username.txt
+[root@myvolsecret mysecrets]# cat password.txt 
+pass1234
+
+- both files are here
+-----------------------------------------------------------------------------------
+
+======================
+NAMESPACES
+======================
+
+- In Kubernetes, namespaces provides a mechanism for isolating groups of resources within a single cluster.
+- Names of resources need to be unique within a namespace, but not across namespaces.
+- Namespace-based scoping is applicable only for namespaced objects (e.g. Deployments, Services, etc) and 
+  not for cluster-wide objects (e.g. StorageClass, Nodes, PersistentVolumes, etc).
+
+Kubernetes starts with four initial namespaces:
+
+1) default:
+Kubernetes includes this namespace so that you can start using your new cluster without first creating a namespace.
+
+2) kube-node-lease
+This namespace holds Lease objects associated with each node. Node leases allow the kubelet to 
+send heartbeats so that the control plane can detect node failure.
+
+3) kube-public
+This namespace is readable by all clients (including those not authenticated).
+
+4) kube-system
+The namespace for objects created by the Kubernetes system.
+
+[ec2-user@ip-172-31-27-27 ~]$ kubectl get namespaces
+NAME              STATUS   AGE
+default           Active   27h
+kube-node-lease   Active   27h
+kube-public       Active   27h
+kube-system       Active   27h
+
+- we have four default namespaces
+- now create namespaces.yml
+
+apiVersion: v1
+kind: Namespace
+metadata:
+   name: dev
+   labels:
+     name: manoj
+
+- now check 
+
+[ec2-user@ip-172-31-27-27 ~]$ kubectl get namespaces
+NAME              STATUS   AGE
+default           Active   27h
+dev               Active   4m25s
+kube-node-lease   Active   27h
+kube-public       Active   27h
+kube-system       Active   27h
+
+- a new namespaces "dev" is added, now launch a new pod 
+
+kind: Pod                              
+apiVersion: v1                     
+metadata:                           
+  name: testpod                  
+spec:                                    
+  containers:                      
+    - name: container01                     
+      image: ubuntu              
+      command: ["/bin/bash", "-c", "while true; do echo hello world; sleep 5 ; done"]
+  restartPolicy: Never 
+
+- if we checked 'kubectl get pod' we can not see any pod because it search only in default namespaecs
+- we have to give a particular name of namespaces
+
+[ec2-user@ip-172-31-27-27 ~]$ kubectl get pods
+No resources found in default namespace.
+
+[ec2-user@ip-172-31-27-27 ~]$ kubectl get pods -n dev
+NAME      READY   STATUS    RESTARTS   AGE
+testpod   1/1     Running   0          6m45s
+
+- changing to dev namespaces as adefault namespaces
+
+[ec2-user@ip-172-31-27-27 ~]$ kubectl config set-context $(kubectl config current-context) --namespace=dev
+Context "minikube" modified.
+
+[ec2-user@ip-172-31-27-27 ~]$ kubectl config view | grep namespace:
+    namespace: dev
+
+[ec2-user@ip-172-31-27-27 ~]$ kubectl get pods 
+NAME      READY   STATUS    RESTARTS   AGE
+testpod   1/1     Running   0          10m
+
+- the default namespace is changed
+
+=================================================
+Resource quota --> limits and request 
+================================================
+
+In Kubernetes, resource quotas are used to set limits and requests on the compute resources (such as CPU and memory) that pods and containers can consume within a namespace. Resource quotas help ensure that applications are allocated the appropriate amount of resources, preventing them from using excessive resources and impacting the stability of the cluster.
+
+Here's how limits and requests work within resource quotas:
+
+Limits:
+Limits specify the maximum amount of a resource that a pod or container is allowed to consume. If a pod/container exceeds its limit, it may be subject to throttling or eviction. Limits are defined for both CPU and memory.
+
+Requests:
+Requests define the minimum amount of a resource that a pod/container needs to function properly. Kubernetes uses resource requests to schedule pods and allocate resources on nodes. Requests are defined for both CPU and memory.
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: resource-pod
+spec:
+  containers:
+    - name: app-container
+      image: my-app-image
+      resources:
+        limits:
+          cpu: "1"
+          memory: "1Gi"
+        requests:
+          cpu: "0.5"
+          memory: "512Mi"
+
+
+============================
+Horizontal Pod Autoscaler
+============================
+
+- In Kubernetes, a HorizontalPodAutoscaler automatically updates a workload resource (such as a Deployment or StatefulSet),   with the aim of automatically scaling the workload to match demand.
+- Horizontal scaling means that the response to increased load is to deploy more Pods.
+- This is different from vertical scaling, which for Kubernetes would mean assigning more resources 
+  (for example: memory or CPU) to the Pods that are already running for the workload.
+                       
+- scaling can be done only for scalable objects like controller, deployment or replica set.
+- download metrics server and we get metricserver.yml
+
+wget -O metricserver.yml https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+
+- edit file metricserver.yml add '--kubelet-insecure-tls' in deployment certificates
+- generally the metric server required tls certificates but with this command we can use metric server
+
+[ec2-user@ip-172-31-27-27 ~]$ kubectl apply -f metricserver.yml
+
+- now deploy a pod 
+
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+   name: mydeploy
+spec:
+   replicas: 1
+   selector:
+    matchLabels:
+     name: deployment
+   template:
+     metadata:
+       name: testpod8
+       labels:
+         name: deployment
+     spec:
+      containers:
+        - name: c00
+          image: httpd
+          ports:
+          - containerPort: 80
+          resources:
+            limits:
+              cpu: 500m
+            requests:
+              cpu: 200m
+
+:wq
+
+[ec2-user@ip-172-31-27-27 ~]$ kubectl apply -f hpsdeploy.yml 
+deployment.apps/mydeploy created
+
+[ec2-user@ip-172-31-27-27 ~]$ kubectl get all
+NAME                            	 READY       STATUS       RESTARTS      AGE
+pod/mydeploy-6bd88977d5-m4rzd  		 1/1         Running      0             79s
+
+NAME               		         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+service/kubernetes	                 ClusterIP   10.96.0.1    <none>        443/TCP   35h
+
+NAME                     	         READY       UP-TO-DATE   AVAILABLE     AGE
+deployment.apps/mydeploy  	         1/1         1            1             79s
+
+NAME                                 	 DESIRED     CURRENT      READY         AGE
+replicaset.apps/mydeploy-6bd88977d5 	  1          1            1             79s
+
+- we deploy a pod is running, replicaset and deployment is also running and we have only one pod 
+- now we have to do horizontal pod autoscale 
+
+[ec2-user@ip-172-31-27-27 ~]$ kubectl autoscale deployment mydeploy --cpu-percent=20 --min=1 --max=10
+horizontalpodautoscaler.autoscaling/mydeploy autoscaled
+
+where
+
+mydeploy       - it is name of our deploy
+cpu-percent=20 - when the average cpu utilization reach at 20% then a pod will create
+min=1          - minimum size of pod 
+max=10         - maximum size of pod
+
+[ec2-user@ip-172-31-27-27 ~]$ kubectl get hpa
+NAME       REFERENCE             TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+mydeploy   Deployment/mydeploy   0%/20%    1         10        1          4m6s
+
+- here we can see our HPA, now it is at 0% and total pod is one
+- now we increase traffic in pod and see how it will autoscale the pod
+- open another duplicate tab and try to do upgrade so that our traffic gets increase
+
+Every 2.0s: kubectl get all                                                                                                                         Fri Mar 10 17:56:02 2023
+
+NAME                            READY   STATUS    RESTARTS   AGE
+pod/mydeploy-6bd88977d5-b99nr   1/1     Running   0          26s
+pod/mydeploy-6bd88977d5-ldw9v   1/1     Running   0          26s
+pod/mydeploy-6bd88977d5-m4rzd   1/1     Running   0          19m
+pod/mydeploy-6bd88977d5-tnjn9   1/1     Running   0          26s
+
+NAME                 TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+service/kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   35h
+
+NAME                       READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/mydeploy   4/4     4            4           19m
+
+NAME                                  DESIRED   CURRENT   READY   AGE
+replicaset.apps/mydeploy-6bd88977d5   4         4         4       19m
+
+NAME                                           REFERENCE             TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/mydeploy   Deployment/mydeploy   75%/20%   1         10        4          11m
+
+- see as soon as our target is reached at 75% they created three another pod 
+- but when the target reduce up to 20% they will scale down the pod bot it will take a default time 5 min		# 5 min
+- after 5 minutes
+
+Every 2.0s: kubectl get all                                                                                                                         Fri Mar 10 18:01:03 2023
+
+NAME                            READY   STATUS    RESTARTS   AGE
+pod/mydeploy-6bd88977d5-m4rzd   1/1     Running   0          24m
+
+NAME                 TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+service/kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   35h
+
+NAME                       READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/mydeploy   1/1     1            1           24m
+
+NAME                                  DESIRED   CURRENT   READY   AGE
+replicaset.apps/mydeploy-6bd88977d5   1         1         1       24m
+
+NAME                                           REFERENCE             TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/mydeploy   Deployment/mydeploy   0%/20%    1         10        4          16m
+
+- pod is reduced to one as the target reduced to 0%
+
+----------------------------------------------------------------------------------------------
+==JOBS
+
+- A Job creates one or more Pods and will continue to retry execution of the Pods until a specified number of them successfully terminate. 
+- As pods successfully complete, the Job tracks the successful completions. 
+- When a specified number of successful completions is reached, the task (ie, Job) is complete. 
+- Deleting a Job will clean up the Pods it created. Suspending a Job will delete its active Pods until the Job is resumed again.
+
+--use cases
+- take backup of DB
+- helm charts uses jobs
+- running batch processes
+- log rotation 
+- run a task or schedule interval
+
+- now create one manifest and check whether it stops after given interval
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: testjob
+spec:
+  template:
+    metadata:
+      name: testjob
+    spec:
+      containers:
+      - name: container01
+        image: centos:7
+        command: ["bin/bash", "-c", "echo good-morning; sleep 20"]
+      restartPolicy: Never
+
+:wq
+
+[ec2-user@ip-172-31-27-27 ~]$ kubectl apply -f jobs.yml 
+job.batch/testjob created
+
+[ec2-user@ip-172-31-27-27 ~]$ watch kubectl get pods
+
+Every 2.0s: kubectl get pods                                                                                                                        Sat Mar 11 05:33:30 2023
+
+NAME            READY   STATUS      RESTARTS   AGE
+testjob-xz6qd   0/1     Running     0          45s
+
+[ec2-user@ip-172-31-27-27 ~]$ watch kubectl get pods
+
+Every 2.0s: kubectl get pods                                                                                                                        Sat Mar 11 05:33:54 2023
+
+NAME            READY   STATUS      RESTARTS   AGE
+testjob-xz6qd   0/1     Completed   0          45s
+
+- see after 20 sec the pod status is completed it means container stoped automatically after complition of job
+
+==Parallel execution for Jobs
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: testjob
+spec:
+  parallelism: 5                   # Runs for pods in parallel
+  activeDeadlineSeconds: 20        # pods will terminate after 20 sec
+  template:
+    metadata:
+      name: testjob
+    spec:
+      containers:
+      - name: counter
+        image: centos:7
+        command: ["bin/bash", "-c", "echo good-morning; sleep 30"]
+      restartPolicy: Never
+
+Every 2.0s: kubectl get pods                                                                                                                        Sat Mar 11 05:46:57 2023
+
+NAME            READY   STATUS    RESTARTS   AGE
+testjob-2974s   1/1     Running   0          11s
+testjob-6swlt   1/1     Running   0          11s
+testjob-fpx8j   1/1     Running   0          11s
+testjob-mmxt8   1/1     Running   0          11s
+testjob-t8wh2   1/1     Running   0          11s
+
+- this pods will terminate after active deadline seconds
+
+== CronJob
+
+- CronJob is meant for performing regular scheduled actions such as backups, report generation, and so on. 
+- One CronJob object is like one line of a crontab (cron table) file on a Unix system. 
+- It runs a job periodically on a given schedule, written in Cron format.
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+ name: hello
+spec:
+ schedule: "* * * * *"      # job will terminate after 10 sec and create new pod at every minute
+ jobTemplate:
+   spec:
+     template:
+       spec:
+         containers:
+         - image: ubuntu
+           name: bhupi
+           command: ["/bin/bash", "-c", "echo hiii-manoj; sleep 10"]
+         restartPolicy: Never
+
+:wq
+
+[ec2-user@ip-172-31-27-27 ~]$ kubectl get pod 
+NAME                   READY   STATUS      RESTARTS   AGE
+hello-27975246-57fzc   0/1     Completed   0          2m37s
+hello-27975247-68kdl   0/1     Completed   0          97s		# state is completed after 1o sec
+hello-27975248-8t62g   0/1     Completed   0          37s   		# new pod is created after every minute
+
+------------------------------------------------
+== Init Containers
+
+- Init containers: specialized containers that run before app containers in a Pod. 
+- Init containers can contain utilities or setup scripts not present in an app image.
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: initcontainer
+spec:
+  initContainers:
+  - name: c1
+    image: centos
+    command: ["/bin/sh", "-c", "echo HELLO WORLD > /tmp/xchange/testfile; sleep 30"]
+    volumeMounts:        
+      - name: xchange
+        mountPath: "/tmp/xchange"  
+  containers:
+  - name: c2
+    image: centos
+    command: ["/bin/bash", "-c", "while true; do echo `cat /tmp/data/testfile`; sleep 5; done"]
+    volumeMounts:
+      - name: xchange
+        mountPath: "/tmp/data"
+  volumes:                            
+  - name: xchange
+    emptyDir: {}
+
+:wq
+
+[ec2-user@ip-172-31-27-27 ~]$ kubectl apply -f init.yml 
+pod/initcontainer created
+[ec2-user@ip-172-31-27-27 ~]$ kubectl get pods
+NAME            READY   STATUS     RESTARTS   AGE
+initcontainer   0/1     Init:0/1   0          8s
+
+- two container is creating init and init container
+
+[ec2-user@ip-172-31-27-27 ~]$ kubectl get pods
+NAME            READY   STATUS    RESTARTS   AGE
+initcontainer   1/1     Running   0          104s   
+
+[ec2-user@ip-172-31-27-27 ~]$ kubectl logs -f pods/initcontainer
+Defaulted container "c2" out of: c2, c1 (init)
+HELLO WORLD
+HELLO WORLD
+HELLO WORLD
+HELLO WORLD
+
+- here we can see the string from container c1 is showing in c2
+
+-------------------------------------------------------------------------
+== POD LIFECYCLE
+
+Pending:
+The Pod has been accepted by the Kubernetes cluster, but one or more of the containers has not been set up and made ready to run. 
+This includes time a Pod spends waiting to be scheduled as well as the time spent downloading container images over the network.
+
+Running:
+The Pod has been bound to a node, and all of the containers have been created. 
+At least one container is still running, or is in the process of starting or restarting.
+
+Succeeded:
+All containers in the Pod have terminated in success, and will not be restarted.
+
+Failed:	
+All containers in the Pod have terminated, and at least one container has terminated in failure. 
+That is, the container either exited with non-zero status or was terminated by the system.
+
+Unknown:	
+For some reason the state of the Pod could not be obtained. 
+This phase typically occurs due to an error in communicating with the node where the Pod should be running.
+
+Completed:
+the pod has run to completion as there is nothing to keep it running.
+
+== Pod conditions
+
+A Pod has a PodStatus, which has an array of PodConditions through which the Pod has or has not passed. 
+Kubelet manages the following PodConditions: 
+using "kubectl describe pod <podname>" can get condition of pod
+
+- PodScheduled    : the Pod has been scheduled to a node.
+- PodHasNetwork   : (alpha feature; must be enabled explicitly) the Pod sandbox has been successfully created and networking configured.
+- ContainersReady : all containers in the Pod are ready.
+- Initialized     : all init containers have completed successfully.
+- Ready           : the Pod is able to serve requests and should be added to the load balancing pools of all matching Services.
+- UnScheduled	  : the scheduler can not schedule pod right now
+
+[ec2-user@ip-172-31-27-27 ~]$ kubectl describe pod/initcontainer | grep -A 5 Conditions:
+Conditions:
+  Type              Status
+  Initialized       True 
+  Ready             True 
+  ContainersReady   True 
+  PodScheduled      True 
+-----------------------------
+==Container states
+
+- As well as the phase of the Pod overall, Kubernetes tracks the state of each container inside a Pod.
+- You can use container lifecycle hooks to trigger events to run at certain points in a container's lifecycle.
+- Once the scheduler assigns a Pod to a Node, the kubelet starts creating containers for that Pod using a container runtime. 
+- There are three possible container states: Waiting, Running, and Terminated.
+
+To check the state of a Pod's containers, you can use kubectl describe pod <name-of-pod>. The output shows the state for each container within that Pod.
+
+Waiting:
+If a container is not in either the Running or Terminated state, it is Waiting.
+
+Running:
+The Running status indicates that a container is executing without issues.
+
+Terminated:
+A container in the Terminated state began execution and then either ran to completion or failed for some reason.
+
+[ec2-user@ip-172-31-27-27 ~]$ kubectl describe pod/initcontainer | grep State:
+    State:          Terminated
+    State:          Running
+
+- there are two containers one is running and another is at terminated state
+
+--------------------------------------------------------------------------------
+
+=========================
+Taints and Tolerations
+=========================
+
+In Kubernetes, taints and tolerations are mechanisms used to control the scheduling of pods onto nodes in a cluster. They are used to influence which nodes are eligible to run specific pods, providing more granular control over where pods are placed.
+
+Taints:
+A taint is a label applied to a node that indicates certain conditions or restrictions on the node. Taints prevent pods from being scheduled onto nodes unless the pods have corresponding tolerations that match the taints.
+
+Taints can be applied to nodes with different effects:
+
+NoSchedule: Prevents new pods from being scheduled onto nodes with this taint.
+PreferNoSchedule: Encourages the scheduler to avoid scheduling new pods onto nodes with this taint.
+NoExecute: Evicts existing pods that do not tolerate the taint.
+
+apiVersion: v1
+kind: Node
+metadata:
+  name: node-1
+spec:
+  taints:
+    - key: example.com/special
+      value: "true"
+      effect: NoSchedule
+
+
+Tolerations:
+A toleration is a configuration added to a pod's specification that allows the pod to tolerate specific taints on nodes. Tolerations indicate that a pod is willing to be scheduled onto nodes with the corresponding taints.
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: my-pod
+spec:
+  tolerations:
+    - key: example.com/special
+      operator: "Equal"
+      value: "true"
+      effect: NoSchedule
+
+
+
+----------------------------------------------------------------------------------------------------------
+
+ 
+
+
+
+
+
+
+
+
+
+                       
+
+
+
+ 
